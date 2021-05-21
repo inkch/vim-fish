@@ -53,70 +53,43 @@ function! s:IsSwitch(lnum)
 endfunction
 
 function! fish#Indent()
-    let l:line = getline(v:lnum)
-    if s:IsString(v:lnum, 1)
-        return indent(v:lnum)
-    endif
-    " shiftwidth can be misleading in recent versions, use shiftwidth() if
-    " it is available.
-    if exists('*shiftwidth')
-        let l:shiftwidth = shiftwidth()
-    else
-        let l:shiftwidth = &shiftwidth
-    endif
-    let l:prevlnum = s:FindPrevLnum(v:lnum - 1)
-    if l:prevlnum == 0
+    let l:prevlnum = prevnonblank(v:lnum - 1)
+    if l:prevlnum ==# 0
         return 0
     endif
-    let l:shift = 0
     let l:prevline = getline(l:prevlnum)
+    let l:line = getline(v:lnum)
+    let l:shiftwidth = shiftwidth()
     let l:previndent = indent(l:prevlnum)
-    if s:IsContinuedLine(v:lnum)
-        " It is customary to increment indentation of continued lines by four
-        " or a custom value defined by the user if available.
-        let l:previndent = indent(v:lnum - 1)
-        if s:IsContinuedLine(v:lnum - 1)
-            return l:previndent
-        elseif exists('g:fish_indent_cont')
-            return l:previndent + g:fish_indent_cont
-        elseif exists('g:indent_cont')
-            return l:previndent + g:indent_cont
+    let l:indent = l:previndent
+    if l:prevline =~# '\v^\s*%(begin|if|else|while|for|function|switch|case)>'
+        let l:indent += l:shiftwidth
+    endif
+    if l:line =~# '\v^\s*end>'
+        let l:indent -= l:shiftwidth
+        " If we're inside a case, dedent twice because it ends the switch.
+        if l:prevline =~# '\v^\s*case>'
+            " Previous line starts the case.
+            let l:indent -= l:shiftwidth
         else
-            return l:previndent + l:shiftwidth
+            " Scan back to a dedented line to find whether we're in a case.
+            let l:i = l:prevlnum
+            while l:i >= 1 && indent(l:i) >= l:previndent
+                let l:i = prevnonblank(l:i - 1)
+            endwhile
+            if indent(l:i) < l:previndent && getline(l:i) =~# '\v^\s*case>'
+                let l:indent -= l:shiftwidth
+            endif
         endif
+    elseif l:line =~# '\v^\s*else>'
+        let l:indent -= l:shiftwidth
+    elseif l:prevline !~# '\v^\s*switch>' && l:line =~# '\v^\s*case>'
+        let l:indent -= l:shiftwidth
     endif
-    if l:prevline =~ '(\s*$'
-        " Inside a substitution
-        let l:shift += 1
+    if l:indent < 0
+        return 0
     endif
-    if l:line =~ '^\s*)'
-        " Outside a substitution
-        let l:shift -= 1
-    endif
-    if l:prevline =~# '\v^\s*%(begin|if|else|while|for|function|case|switch)>'
-        " First line inside a block, increase by one.
-        let l:shift += 1
-    endif
-    if l:line =~# '\v^\s*%(end|case|else)>'
-        " "end", "case" or "else", decrease by one.
-        let l:shift -= 1
-    endif
-    if l:line =~# '\v^\s*<case>' && l:prevline =~# '\v<switch>'
-        " "case" following "switch", increase by one.
-        let l:shift += 1
-    endif
-    if l:line =~# '\v\s*end>' && l:prevline !~# '\v<switch>' && s:IsSwitch(v:lnum)
-        " "end" ends switch block, but not immediately following "switch"
-        " decrease by one more so it matches the indentation of "switch".
-        let l:shift -= 1
-    endif
-    if l:prevline =~# '\v^\s*%(if|while|for|else|switch|end)>.*<begin>'
-        " "begin" after start of block, increase by one.
-        let l:shift += 1
-    endif
-    let l:indent = l:previndent + l:shift * l:shiftwidth
-    " Only return zero or positive numbers.
-    return l:indent < 0 ? 0 : l:indent
+    return l:indent
 endfunction
 
 function! fish#Format()
@@ -151,16 +124,9 @@ function! fish#Complete(findstart, base)
         endif
         let l:results = []
         let l:completions =
-            \ system('fish -c "complete -C'.shellescape(a:base).'"')
-        let l:sufpos = match(a:base, '\v\S+$')
-        if l:sufpos >= 0
-            let l:cmd = a:base[:l:sufpos-1]
-            let l:arg = a:base[l:sufpos:]
-        else
-            let l:cmd = a:base
-            let l:arg = ''
-        endif
-        for l:line in filter(split(l:completions, '\n'), '!empty(v:val)')
+                    \ system('fish -c "complete -C'.shellescape(a:base).'"')
+        let l:cmd = substitute(a:base, '\v\S+$', '', '')
+        for l:line in filter(split(l:completions, '\n'), 'len(v:val)')
             let l:tokens = split(l:line, '\t')
             let l:term = l:tokens[0]
             if l:term =~? '^\V'.l:arg
