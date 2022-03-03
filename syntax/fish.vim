@@ -50,7 +50,8 @@ syntax match fishFunctionName '[^[:space:]/()-][^[:space:]/()]*' contained
 syntax match fishOperator '[\[\]=*~%&|<>!+-]'
 syntax match fishOperator '\.\.'
 
-syntax match fishComment /#.*/
+syntax match fishComment /#.*/ contains=@Spell
+syntax match fishShebang /#!.*/
 syntax match fishSpecial /[\();]/
 syntax match fishSpecial /\\\$/
 syntax match fishOption /\v<[+-][[:alnum:]-_]+>/
@@ -63,8 +64,8 @@ syntax match fishSingleQuoteEscape /\\[\\']/ contained
 syntax match fishDoubleQuoteEscape /\\[\\"$\n]/ contained
 syntax cluster fishStringEscape contains=fishSingleQuoteEscape,fishDoubleQuoteEscape
 
-syntax region fishString start=/'/ skip=/\v(\\{2})|(\\)'/ end=/'/ contains=fishSingleQuoteEscape
-syntax region fishString start=/"/ skip=/\v(\\{2})|(\\)"/ end=/"/ contains=fishDoubleQuoteEscape,fishDeref,fishDerefExtension
+syntax region fishString start=/'/ skip=/\v(\\{2})|(\\)'/ end=/'/ contains=fishSingleQuoteEscape,@Spell
+syntax region fishString start=/"/ skip=/\v(\\{2})|(\\)"/ end=/"/ contains=fishDoubleQuoteEscape,fishDeref,fishDerefExtension,@Spell
 syntax match fishCharacter /\v\\[0abefnrtv *?~%#(){}\[\]<>&;"']|\\[xX][0-9a-f]{1,2}|\\o[0-7]{1,2}|\\u[0-9a-f]{1,4}|\\U[0-9a-f]{1,8}|\\c[a-z]/
 syntax match fishCharacter /\v\\e[a-zA-Z0-9]/
 
@@ -78,6 +79,7 @@ highlight default link fishCommand Keyword
 highlight default link fishUnixCommand Keyword
 highlight default link fishFunctionName Function
 highlight default link fishComment Comment
+highlight default link fishShebang Comment
 highlight default link fishOperator Operator
 highlight default link fishSpecial Special
 highlight default link fishDeref PreProc
